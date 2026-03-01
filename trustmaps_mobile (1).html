@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Trustmaps</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --g:#22c55e;--gd:#16a34a;--gbg:#f0fdf4;
+  --p:#7c3aed;--pbg:#f5f3ff;
+  --tx:#111827;--mt:#6b7280;--mt2:#9ca3af;
+  --br:#e5e7eb;--br2:#d1d5db;
+  --sf:#fff;--sf2:#f9fafb;--pb:#f3f4f6;
+}
+html,body{width:100%;height:100%;overflow:hidden;font-family:'DM Sans',sans-serif;background:#e5e7eb;-webkit-font-smoothing:antialiased}
+
+/* ═══ HEADER ═══ */
+.hdr{position:fixed;top:0;left:0;right:0;z-index:500;padding:12px 12px 0;display:flex;align-items:center;gap:8px;pointer-events:none}
+.hdr-inner{display:flex;align-items:center;gap:8px;flex:1;background:#fff;border-radius:16px;padding:9px 12px 9px 10px;box-shadow:0 2px 16px rgba(0,0,0,.14),0 1px 4px rgba(0,0,0,.08);pointer-events:all}
+.logo-mark{width:28px;height:28px;background:var(--g);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo-dot{width:9px;height:9px;background:#fff;border-radius:50%}
+.logo-name{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:var(--tx);letter-spacing:-.3px;flex-shrink:0}
+.h-sep{width:1px;height:18px;background:var(--br);flex-shrink:0}
+.search-wrap{flex:1;display:flex;align-items:center;gap:6px;min-width:0}
+.search-wrap svg{opacity:.35;flex-shrink:0}
+.search-wrap input{background:none;border:none;outline:none;font:400 13px 'DM Sans',sans-serif;color:var(--tx);width:100%;min-width:0}
+.search-wrap input::placeholder{color:var(--mt2)}
+.home-btn-inner{width:28px;height:28px;border-radius:7px;border:1px solid var(--br);background:var(--sf2);display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;flex-shrink:0}
+
+/* ═══ MAP CANVAS ═══ */
+#map-viewport{position:fixed;inset:0;overflow:hidden;cursor:grab;user-select:none}
+#map-viewport.dragging{cursor:grabbing}
+#map-world{
+  position:absolute;
+  /* size = 3× screen so you can pan around */
+  will-change:transform;
+  transform-origin:0 0;
+}
+/* Map tiles: roads, blocks, parks drawn as canvas */
+#map-canvas{position:absolute;top:0;left:0;display:block}
+
+/* neighborhood labels + cluster labels — sit in world space */
+.nbh{position:absolute;font:600 9px 'Syne',sans-serif;color:rgba(0,0,0,.26);letter-spacing:.9px;text-transform:uppercase;pointer-events:none;white-space:nowrap;transform:translate(-50%,-50%)}
+.clbl{position:absolute;background:rgba(255,255,255,.9);border:1px solid rgba(34,197,94,.28);border-radius:20px;padding:3px 10px;font:500 9px 'DM Sans',sans-serif;color:var(--gd);white-space:nowrap;pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.07);transform:translate(-50%,-50%)}
+
+/* ═══ PINS — InstaMap style ═══ */
+/* Each pin = circle avatar + name·time label below */
+.pw{
+  position:absolute;
+  transform:translate(-50%,-50%);
+  pointer-events:all;cursor:pointer;z-index:5;
+  display:flex;flex-direction:column;align-items:center;gap:5px;
+  transition:opacity .2s;
+}
+.pw.sel{z-index:40}
+
+/* The ring container */
+.pc{
+  border-radius:50%;
+  position:relative;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+  transition:transform .25s cubic-bezier(.34,1.56,.64,1);
+}
+.pw.sel .pc{transform:scale(1.1)}
+
+/* Avatar circle inside the ring */
+.pa-inner{
+  border-radius:50%;
+  overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Syne',sans-serif;font-weight:700;
+  color:#fff;
+  user-select:none;
+  flex-shrink:0;
+}
+
+/* Name · time label — the Airbnb/InstaMap variable */
+.pin-label{
+  display:flex;align-items:center;gap:4px;
+  background:rgba(255,255,255,.96);
+  border-radius:20px;
+  padding:3px 9px 3px 8px;
+  box-shadow:0 1px 6px rgba(0,0,0,.13);
+  white-space:nowrap;
+  pointer-events:none;
+  border:1px solid rgba(0,0,0,.06);
+}
+.pin-name{
+  font:600 11px 'DM Sans',sans-serif;
+  color:var(--tx);
+}
+.pin-time{
+  font:600 11px 'DM Sans',sans-serif;
+}
+
+/* GLOW state */
+.pg .pc{
+  width:52px;height:52px;
+  padding:3px;
+  background:conic-gradient(var(--g) 0%,var(--g) 100%);
+  box-shadow:0 0 0 4px rgba(34,197,94,.18),0 2px 10px rgba(0,0,0,.12);
+}
+.pg .pa-inner{width:46px;height:46px;font-size:14px;background:linear-gradient(135deg,#1e3a1e,#166534)}
+.pg .pc::before{content:'';position:absolute;inset:-8px;border-radius:50%;border:2px solid rgba(34,197,94,.25);animation:gp 2.6s ease-out infinite}
+.pg .pc::after{content:'';position:absolute;inset:-16px;border-radius:50%;border:1.5px solid rgba(34,197,94,.12);animation:gp 2.6s ease-out infinite .85s}
+@keyframes gp{0%{opacity:1;transform:scale(.88)}100%{opacity:0;transform:scale(1.25)}}
+.pg .pin-time{color:var(--gd)}
+
+/* ACTIVE state */
+.pa .pc{
+  width:44px;height:44px;
+  padding:2.5px;
+  background:var(--g);
+  box-shadow:0 1px 6px rgba(0,0,0,.1);
+}
+.pa .pa-inner{width:39px;height:39px;font-size:12px;background:linear-gradient(135deg,#1e3a1e,#166534)}
+.pa .pin-time{color:var(--gd)}
+
+/* PRESENT state */
+.pp .pc{
+  width:38px;height:38px;
+  padding:2px;
+  background:rgba(34,197,94,.38);
+}
+.pp .pa-inner{width:34px;height:34px;font-size:11px;background:#d1d5db}
+.pp .pin-label{opacity:.85}
+.pp .pin-time{color:var(--mt)}
+.pp .pin-name{color:var(--mt)}
+
+/* QUIET state */
+.pq .pc{
+  width:32px;height:32px;
+  padding:2px;
+  background:rgba(209,213,219,.6);
+  opacity:.5;
+}
+.pq .pa-inner{width:28px;height:28px;font-size:9px;background:#e5e7eb}
+.pq .pin-label{opacity:.5}
+.pq .pin-time{color:var(--mt2)}
+.pq .pin-name{color:var(--mt2)}
+
+/* LAYER 2: purple selected — ring turns purple */
+.pw.L2 .pc{
+  background:var(--p)!important;
+  box-shadow:0 0 0 6px rgba(124,58,237,.2),0 2px 14px rgba(124,58,237,.35)!important;
+  transition:background .3s,box-shadow .3s;
+}
+/* Breathing pulse rings for selected purple pin */
+.pw.L2 .pc::before{
+  content:'';position:absolute;inset:-10px;border-radius:50%;
+  border:2.5px solid rgba(124,58,237,.3);
+  animation:pp2 2s ease-out infinite;
+}
+.pw.L2 .pc::after{
+  content:'';position:absolute;inset:-22px;border-radius:50%;
+  border:1.5px solid rgba(124,58,237,.15);
+  animation:pp2 2s ease-out infinite .65s;
+}
+@keyframes pp2{0%{opacity:1;transform:scale(.82)}100%{opacity:0;transform:scale(1.35)}}
+/* Label turns purple */
+.pw.L2 .pin-time{color:var(--p)!important}
+.pw.L2 .pin-name{color:var(--p)!important}
+.pw.L2 .pin-label{border-color:rgba(124,58,237,.25)!important;box-shadow:0 2px 10px rgba(124,58,237,.12)!important}
+/* Avatar inner stays, just ring changes */
+.pw.L2 .pa-inner{box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)}
+
+/* SATELLITES */
+/* Satellite pins — InstaMap style but purple */
+.sat{
+  position:absolute;
+  transform:translate(-50%,-50%);
+  pointer-events:all;cursor:pointer;z-index:35;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  animation:si .4s cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes si{0%{opacity:0;transform:translate(-50%,-50%) scale(0)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+
+/* Purple ring */
+.sat-ring{
+  width:40px;height:40px;border-radius:50%;
+  background:var(--p);
+  padding:2.5px;
+  box-shadow:0 0 0 3px rgba(124,58,237,.18),0 2px 10px rgba(124,58,237,.25);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+/* Inner avatar — purple tinted */
+.sat-av{
+  width:35px;height:35px;border-radius:50%;
+  background:linear-gradient(135deg,#4c1d95,#6d28d9);
+  display:flex;align-items:center;justify-content:center;
+  font-size:16px;
+}
+/* Label pill — same as main pin but purple text */
+.sat-lbl{
+  display:flex;align-items:center;gap:3px;
+  background:rgba(255,255,255,.96);
+  border:1px solid rgba(124,58,237,.2);
+  border-radius:20px;
+  padding:2px 8px;
+  box-shadow:0 1px 6px rgba(0,0,0,.1);
+  white-space:nowrap;
+  pointer-events:none;
+}
+.sat-lbl-job{font:500 9.5px 'DM Sans',sans-serif;color:var(--p)}
+.sat-lbl-time{font:600 9.5px 'DM Sans',sans-serif;color:var(--p)}
+
+/* SVG orbit lines live in world space */
+#orbit-svg{position:absolute;top:0;left:0;pointer-events:none;z-index:30;overflow:visible}
+
+/* edge indicators: fixed screen-space arrows */
+.ei{position:fixed;z-index:450;background:var(--p);color:#fff;border-radius:20px;padding:6px 12px;font:600 10px 'Syne',sans-serif;display:flex;align-items:center;gap:5px;box-shadow:0 2px 12px rgba(124,58,237,.35);cursor:pointer;animation:ei-in .3s ease;pointer-events:all}
+@keyframes ei-in{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
+
+/* ═══ MAP UI overlays ═══ */
+.stats-bar{position:fixed;bottom:214px;left:50%;transform:translateX(-50%);background:#fff;border-radius:30px;padding:8px 18px;box-shadow:0 2px 14px rgba(0,0,0,.12);z-index:100;display:flex;gap:16px;align-items:center;pointer-events:none;white-space:nowrap;transition:bottom .32s cubic-bezier(.34,1.56,.64,1)}
+.sb-dot{width:7px;height:7px;border-radius:50%;background:var(--g);animation:bk 2.2s infinite}
+@keyframes bk{0%,100%{opacity:1}50%{opacity:.35}}
+.sb-num{font:700 15px 'Syne',sans-serif;color:var(--gd)}
+.sb-lbl{font:400 11px 'DM Sans',sans-serif;color:var(--mt)}
+.sb-sep{width:1px;height:20px;background:var(--br)}
+
+.zoom-ctrl{position:fixed;right:12px;bottom:228px;z-index:100;display:flex;flex-direction:column;gap:2px;transition:bottom .32s cubic-bezier(.34,1.56,.64,1)}
+.zbtn{width:36px;height:36px;background:#fff;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#555;font-weight:300;box-shadow:0 1px 6px rgba(0,0,0,.12);cursor:pointer;user-select:none}
+
+.loc-btn{position:fixed;right:12px;bottom:280px;width:38px;height:38px;background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,.12);z-index:100;cursor:pointer;transition:bottom .32s cubic-bezier(.34,1.56,.64,1)}
+
+.map-legend{position:fixed;right:12px;bottom:330px;background:#fff;border-radius:9px;padding:7px 11px;font:400 9.5px 'DM Sans',sans-serif;color:var(--mt);box-shadow:0 1px 6px rgba(0,0,0,.1);z-index:100;display:flex;flex-direction:column;gap:5px;transition:bottom .32s cubic-bezier(.34,1.56,.64,1)}
+.ml{display:flex;align-items:center;gap:5px}
+.mld{width:10px;height:10px;border-radius:50%;background:var(--pb);flex-shrink:0}
+.ml-a{border:2px solid var(--g)}.ml-b{border:1.5px solid rgba(34,197,94,.6)}.ml-c{border:1.5px solid rgba(34,197,94,.3)}.ml-d{border:1px solid #d1d5db;opacity:.55}
+
+/* ═══ BOTTOM SHEET ═══ */
+.sheet{position:fixed;left:0;right:0;bottom:0;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -3px 30px rgba(0,0,0,.12);z-index:200;height:92vh;transform:translateY(calc(92vh - 200px));transition:transform .35s cubic-bezier(.34,1.56,.64,1);display:flex;flex-direction:column;will-change:transform}
+.sh-handle{width:36px;height:4px;background:#d1d5db;border-radius:2px;margin:10px auto 0;flex-shrink:0;cursor:grab}
+.sh-def{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+.sh-prompt{padding:12px 16px 10px;font:400 13px 'DM Sans',sans-serif;color:var(--mt);flex-shrink:0;border-bottom:1px solid var(--br)}
+.sh-prompt strong{color:var(--tx);font-weight:600}
+.sh-feed{overflow-y:auto;flex:1}
+.sh-feed::-webkit-scrollbar{display:none}
+.fi{display:flex;align-items:center;gap:10px;padding:11px 16px;cursor:pointer;transition:background .1s;border-bottom:1px solid var(--br)}
+.fi:active{background:var(--sf2)}
+.fi-av{width:40px;height:40px;border-radius:11px;background:var(--pb);display:flex;align-items:center;justify-content:center;font:700 12px 'Syne',sans-serif;color:var(--tx);flex-shrink:0}
+.fi-av.rg{border:2.5px solid var(--g)}.fi-av.ra{border:2px solid rgba(34,197,94,.6)}.fi-av.rp{border:1.5px solid rgba(34,197,94,.3)}.fi-av.rq{border:1.5px solid var(--br2);opacity:.6}
+.fi-body{flex:1;min-width:0}
+.fi-name{font:600 13px 'DM Sans',sans-serif;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fi-sub{font:400 11px 'DM Sans',sans-serif;color:var(--mt);margin-top:2px}
+.fi-right{text-align:right;flex-shrink:0}
+.fi-time{font:400 10px 'DM Sans',sans-serif;color:var(--mt2)}
+.fi-score{font:700 13px 'Syne',sans-serif}
+.s-hi{color:var(--gd)}.s-mi{color:var(--mt)}.s-lo{color:var(--mt2)}
+
+/* PROFILE */
+.sh-prof{display:none;flex-direction:column;flex:1;overflow:hidden;min-height:0}
+.sh-prof.on{display:flex}
+.pr-top{padding:14px 16px 12px;border-bottom:1px solid var(--br);flex-shrink:0}
+.pr-title-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:3px}
+.pr-name{font:700 22px 'Syne',sans-serif;color:var(--tx);line-height:1.2;flex:1;padding-right:8px}
+.pr-close{width:30px;height:30px;background:var(--sf2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--mt);cursor:pointer;flex-shrink:0;border:1px solid var(--br)}
+.pr-mr{display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap}
+.pr-stars{font-size:13px;color:#f59e0b;letter-spacing:.3px}
+.pr-rating{font:600 13px 'DM Sans',sans-serif;color:var(--tx)}
+.pr-rcount{font:400 12px 'DM Sans',sans-serif;color:var(--mt)}
+.pr-dot{width:3px;height:3px;border-radius:50%;background:var(--mt2)}
+.pr-trade{font:400 12px 'DM Sans',sans-serif;color:var(--mt)}
+.pr-status{font:500 12px 'DM Sans',sans-serif;color:var(--gd)}
+.pr-status .ld{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--g);margin-right:4px;animation:bk 2s infinite;vertical-align:middle}
+.pr-dist{font:400 12px 'DM Sans',sans-serif;color:var(--mt)}
+.pr-actions{display:flex;gap:8px;margin-top:12px}
+.pr-btn{flex:1;height:42px;border-radius:22px;border:none;font:600 12.5px 'DM Sans',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:all .15s}
+.pr-p{background:var(--g);color:#fff}.pr-p:active{background:var(--gd)}
+.pr-s{background:var(--gbg,#f0fdf4);color:var(--gd);border:1.5px solid rgba(34,197,94,.35)}
+.pr-t{background:var(--sf2);color:var(--tx);border:1px solid var(--br)}
+.pr-photos{display:flex;gap:6px;padding:12px 16px;border-bottom:1px solid var(--br)}
+.ph-main{flex:3;background:#111;border-radius:10px;overflow:hidden;position:relative;aspect-ratio:3/2;cursor:pointer}
+.ph-side{flex:1.4;display:flex;flex-direction:column;gap:6px}
+.ph-sm{background:var(--sf2);border-radius:8px;flex:1;display:flex;align-items:center;justify-content:center;font-size:20px;border:1px solid var(--br)}
+.ph-bg{width:100%;height:100%;background:linear-gradient(135deg,#0d1f0d,#1e3a1e,#0d1f0d);display:flex;align-items:center;justify-content:center}
+.ph-play{width:46px;height:46px;background:rgba(255,255,255,.9);border-radius:50%;display:flex;align-items:center;justify-content:center}
+.ph-play::after{content:'▶';font-size:16px;color:#111;margin-left:3px}
+.ph-cap{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.6));padding:18px 10px 8px;color:#fff;font:400 10.5px 'DM Sans',sans-serif}
+.pr-tabs{display:flex;border-bottom:1px solid var(--br);flex-shrink:0;padding:0 16px;overflow-x:auto}
+.pr-tabs::-webkit-scrollbar{display:none}
+.pr-tab{font:500 13px 'DM Sans',sans-serif;color:var(--mt);padding:11px 14px;white-space:nowrap;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;flex-shrink:0}
+.pr-tab.active{color:var(--gd);border-bottom-color:var(--gd)}
+.pr-body{flex:1;overflow-y:auto}
+.pr-body::-webkit-scrollbar{display:none}
+.tab-pane{display:none;padding:0 16px 20px}.tab-pane.on{display:block}
+.ov-stats-row{display:flex;gap:10px;padding:14px 0 12px;border-bottom:1px solid var(--br)}
+.ov-stat{flex:1;background:var(--sf2);border:1px solid var(--br);border-radius:12px;padding:11px;text-align:center}
+.ov-stat-n{font:700 22px 'Syne',sans-serif;color:var(--gd);line-height:1}
+.ov-stat-l{font:400 10px 'DM Sans',sans-serif;color:var(--mt);margin-top:3px}
+.ov-locs{display:flex;flex-direction:column;gap:6px;padding-top:12px}
+.ov-sec-t{font:600 11px 'DM Sans',sans-serif;color:var(--mt);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
+.ov-loc{display:flex;align-items:center;gap:8px;padding:9px 11px;background:var(--sf2);border:1px solid var(--br);border-radius:10px}
+.ov-loc-dot{width:8px;height:8px;border-radius:50%;background:var(--p);flex-shrink:0}
+.ov-loc-name{font:500 12.5px 'DM Sans',sans-serif;color:var(--tx)}
+.ov-loc-cnt{font:400 11px 'DM Sans',sans-serif;color:var(--mt);margin-left:auto}
+.ae{display:flex;gap:10px;padding:12px 0;border-bottom:1px solid var(--br)}.ae:last-child{border-bottom:none}
+.ae-ic{width:36px;height:36px;border-radius:10px;background:var(--sf2);border:1px solid var(--br);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.ae-body{flex:1}.ae-main{font:500 13px 'DM Sans',sans-serif;color:var(--tx);line-height:1.4}
+.ae-sub{font:400 11px 'DM Sans',sans-serif;color:var(--mt);margin-top:2px}
+.ae-time{font:400 10px 'DM Sans',sans-serif;color:var(--mt2);flex-shrink:0;padding-top:2px}
+.sec-hd{display:flex;align-items:center;justify-content:space-between;padding:14px 0 10px}
+.sec-title{font:600 14px 'DM Sans',sans-serif;color:var(--tx);display:flex;align-items:center;gap:7px}
+.sec-v{font:600 9.5px 'DM Sans',sans-serif;color:var(--gd);background:var(--gbg,#f0fdf4);border:1px solid rgba(34,197,94,.25);border-radius:5px;padding:2px 7px}
+.rv{background:var(--sf2);border:1px solid var(--br);border-radius:12px;padding:12px;margin-bottom:10px}
+.rv-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
+.rv-src{display:flex;align-items:center;gap:7px;font:500 13px 'DM Sans',sans-serif;color:var(--tx)}
+.rv-badge{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font:700 11px Arial,sans-serif;flex-shrink:0}
+.rv-g{background:#4285F4;color:#fff}.rv-f{background:#1877F2;color:#fff}
+.rv-stars{color:#f59e0b;font-size:12px;letter-spacing:.5px}
+.rv-text{font:400 12.5px/1.55 'DM Sans',sans-serif;color:var(--mt);margin-bottom:6px}
+.rv-author{font:500 11px 'DM Sans',sans-serif;color:var(--mt2)}
+.info-row{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--br)}.info-row:last-child{border-bottom:none}
+.info-ic{font-size:16px;flex-shrink:0;margin-top:1px}.info-body{flex:1}
+.info-label{font:400 13px 'DM Sans',sans-serif;color:var(--tx)}
+.info-sub{font:400 11px 'DM Sans',sans-serif;color:var(--mt);margin-top:1px}
+.info-link{color:#3b82f6;text-decoration:none}
+.co-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px}
+.co-cell{background:var(--sf2);border-radius:10px;padding:10px;border:1px solid var(--br);text-align:center}
+.co-v{font:700 15px 'Syne',sans-serif;color:var(--tx)}.co-k{font:400 9.5px 'DM Sans',sans-serif;color:var(--mt);margin-top:2px}
+.pr-footer{padding:12px 16px;display:flex;flex-direction:column;gap:9px;border-top:1px solid var(--br)}
+.pr-foot-link{font:400 12px 'DM Sans',sans-serif;color:var(--mt)}
+.pr-foot-brand{font:500 12px 'DM Sans',sans-serif;color:var(--gd)}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-inner">
+    <div class="logo-mark"><div class="logo-dot"></div></div>
+    <div class="logo-name">Trustmaps</div>
+    <div class="h-sep"></div>
+    <div class="search-wrap">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="text" placeholder="Contractors, neighborhoods…">
+    </div>
+    <div class="home-btn-inner">🏠</div>
+  </div>
+</div>
+
+<!-- MAP VIEWPORT → WORLD -->
+<div id="map-viewport">
+  <div id="map-world">
+    <canvas id="map-canvas"></canvas>
+    <!-- neighborhood + cluster labels injected here -->
+    <svg id="orbit-svg"></svg>
+    <!-- pins injected here -->
+  </div>
+</div>
+
+<!-- MAP UI -->
+<div class="stats-bar" id="statsBar">
+  <div style="display:flex;align-items:center;gap:6px"><div class="sb-dot"></div><div class="sb-num" id="jc">47</div><div class="sb-lbl">confirmed jobs near you</div></div>
+  <div class="sb-sep"></div>
+  <div style="display:flex;align-items:center;gap:6px"><div class="sb-num" id="vc">342</div><div class="sb-lbl">homeowners active</div></div>
+</div>
+<div class="zoom-ctrl">
+  <div class="zbtn" id="zIn">+</div>
+  <div class="zbtn" id="zOut" style="font-size:22px;font-weight:200">−</div>
+</div>
+<div class="loc-btn" id="locBtn">⊙</div>
+<div class="map-legend">
+  <div class="ml"><div class="mld ml-a"></div>Glowing</div>
+  <div class="ml"><div class="mld ml-b"></div>Active</div>
+  <div class="ml"><div class="mld ml-c"></div>Present</div>
+  <div class="ml"><div class="mld ml-d"></div>Quiet</div>
+</div>
+
+<!-- BOTTOM SHEET -->
+<div class="sheet" id="sheet">
+  <div class="sh-handle" id="handle"></div>
+  <div class="sh-def" id="shDef">
+    <div class="sh-prompt">Who's active near you — <strong>tap a pin</strong></div>
+    <div class="sh-feed" id="shFeed"></div>
+  </div>
+  <div class="sh-prof" id="shProf">
+    <div class="pr-top">
+      <div class="pr-title-row">
+        <div class="pr-name" id="pName"></div>
+        <div class="pr-close" onclick="closeProf()">✕</div>
+      </div>
+      <div class="pr-mr">
+        <span class="pr-stars" id="pStars"></span>
+        <span class="pr-rating" id="pRating"></span>
+        <span class="pr-rcount" id="pRcount"></span>
+        <span class="pr-dot"></span>
+        <span class="pr-trade" id="pTrade"></span>
+      </div>
+      <div class="pr-mr">
+        <span class="pr-status"><span class="ld"></span><span id="pStatus"></span></span>
+        <span class="pr-dot" style="margin:0 6px"></span>
+        <span class="pr-dist" id="pDist"></span>
+      </div>
+      <div class="pr-actions">
+        <button class="pr-btn pr-p">📩 Estimate</button>
+        <button class="pr-btn pr-s">📞 Call</button>
+        <button class="pr-btn pr-t">🔗 Share</button>
+      </div>
+    </div>
+    <div class="pr-photos">
+      <div class="ph-main"><div class="ph-bg"><div class="ph-play"></div></div><div class="ph-cap" id="pVid"></div></div>
+      <div class="ph-side"><div class="ph-sm">🏠</div><div class="ph-sm">🔨</div></div>
+    </div>
+    <div class="pr-tabs">
+      <div class="pr-tab active" onclick="switchTab('ov',this)">Overview</div>
+      <div class="pr-tab" onclick="switchTab('act',this)">Activity</div>
+      <div class="pr-tab" onclick="switchTab('rv',this)">Reviews</div>
+      <div class="pr-tab" onclick="switchTab('ab',this)">About</div>
+    </div>
+    <div class="pr-body">
+      <div class="tab-pane on" id="tab-ov">
+        <div class="ov-stats-row">
+          <div class="ov-stat"><div class="ov-stat-n" id="ovW">0</div><div class="ov-stat-l">this week</div></div>
+          <div class="ov-stat"><div class="ov-stat-n" id="ovM">0</div><div class="ov-stat-l">this month</div></div>
+          <div class="ov-stat"><div class="ov-stat-n" id="ovR">0%</div><div class="ov-stat-l">confirm rate</div></div>
+        </div>
+        <div class="ov-locs"><div class="ov-sec-t">📍 Main job locations</div><div id="ovLocs"></div></div>
+        <div class="pr-footer" style="margin-top:12px">
+          <div class="pr-foot-link">Found an error in this profile?</div>
+          <div style="height:1px;background:var(--br)"></div>
+          <div style="display:flex;justify-content:space-between">
+            <span class="pr-foot-brand">Trustmaps ✓</span>
+            <span style="font:400 11px 'DM Sans',sans-serif;color:var(--mt2)">trustmaps.ca</span>
+          </div>
+        </div>
+      </div>
+      <div class="tab-pane" id="tab-act"><div class="sec-hd"><div class="sec-title">⚡ Recent Activity</div><div class="sec-v">✓ Verified</div></div><div id="actC"></div></div>
+      <div class="tab-pane" id="tab-rv"><div class="sec-hd"><div class="sec-title">⭐ Avis en ligne</div><div class="sec-v">✓ Vérifié</div></div><div id="rvC"></div></div>
+      <div class="tab-pane" id="tab-ab">
+        <div class="sec-hd"><div class="sec-title">🏢 L'entreprise</div><div class="sec-v">✓ Vérifié</div></div><div id="coC"></div>
+        <div class="sec-hd"><div class="sec-title">🛡️ Conformité</div><div class="sec-v">✓ Vérifié</div></div><div id="compC"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// WORLD SETUP
+// ══════════════════════════════════════════════
+const W = 1800, H_WORLD = 1600; // world size in px
+const TILE = 80; // grid tile size
+
+// Contractors: wx/wy = world pixel coords
+const contractors = [
+  {id:'CB',name:'Couverture Beaulieu',trade:'Roofing',zone:'Limoilou',
+   state:'pg',score:88,wx:440,wy:600,last:'2h ago',short_name:'Beaulieu',avatar:'JB',dist:'1.2 km',badge:'12 jobs',
+   stars:'★★★★★',rating:'4.7',rcount:'(28)',vid:'Nouvelle toiture — Limoilou 2026',
+   week:4,month:12,rate:'94%',
+   locations:[{name:'Limoilou',cnt:'6 jobs'},{name:'Vieux-Québec',cnt:'3 jobs'},{name:'Saint-Roch',cnt:'3 jobs'}],
+   satellites:[
+     {wx:300,wy:480,icon:'🏠',label:'Flat roof · 2h ago'},
+     {wx:560,wy:440,icon:'🔨',label:'Shingle repair · 3d ago'},
+     {wx:620,wy:680,icon:'📸',label:'New install · 5d ago'},
+     {wx:280,wy:720,icon:'✅',label:'Inspection · 1w ago'},
+   ],
+   events:[
+     {ic:'✅',mn:'Job confirmed by client',sb:'Flat roof · Limoilou',tm:'2h ago'},
+     {ic:'⭐',mn:'5-star Google review',sb:'"Très professionnel et propre"',tm:'3h ago'},
+     {ic:'📸',mn:'3 photos uploaded',sb:'Before/after · shingle work',tm:'4h ago'},
+   ],
+   reviews:[
+     {src:'Google',b:'g',sc:'4.7',ct:'(28)',st:'★★★★★',tx:'"Excellent service, équipe sérieuse et ponctuelle."',au:'Félix D. · 3 weeks ago'},
+     {src:'Facebook',b:'f',sc:'100%',ct:'(14)',st:'★★★★★',tx:'"Travail impeccable. Toiture parfaite."',au:'Isabelle M. · 1 month ago'},
+   ],
+   comp:{inc:'3380462831',ins:"L'Unique — $2,000,000",war:'5 ans'},
+   co:{f:'2018',tm:'2026',emp:'6',ow:'Jean Beaulieu',z:'Québec & environs'},
+  },
+  {id:'MR',name:'Menuiserie Roy',trade:'Carpentry',zone:'Vieux-Québec',
+   state:'pg',score:91,wx:960,wy:400,last:'1h ago',short_name:'Roy',avatar:'TR',dist:'2.1 km',badge:'14 jobs',
+   stars:'★★★★★',rating:'4.9',rcount:'(41)',vid:'Terrasse en bois — Vieux-Québec 2026',
+   week:5,month:14,rate:'96%',
+   locations:[{name:'Vieux-Québec',cnt:'7 jobs'},{name:'Montcalm',cnt:'4 jobs'},{name:'Saint-Jean-Baptiste',cnt:'3 jobs'}],
+   satellites:[
+     {wx:800,wy:300,icon:'🏡',label:'Deck install · 1h ago'},
+     {wx:1100,wy:280,icon:'🔨',label:'Railing repair · 2d ago'},
+     {wx:1150,wy:480,icon:'✅',label:'Pergola · 4d ago'},
+     {wx:820,wy:500,icon:'📸',label:'Before/after · 5d ago'},
+   ],
+   events:[
+     {ic:'✅',mn:'Deck installation confirmed',sb:'Cedar deck · Vieux-Québec',tm:'1h ago'},
+     {ic:'⭐',mn:'5-star Google review',sb:'"Excellent, très fiable"',tm:'2h ago'},
+   ],
+   reviews:[{src:'Google',b:'g',sc:'4.9',ct:'(41)',st:'★★★★★',tx:'"Roy a transformé notre terrasse. Qualité irréprochable."',au:'Marc P. · 2 weeks ago'}],
+   comp:{inc:'8821093411',ins:'Intact — $2,000,000',war:'3 ans'},
+   co:{f:'2015',tm:'2026',emp:'8',ow:'Thomas Roy',z:'Grand Québec'},
+  },
+  {id:'PT',name:'Peinture Tanguay',trade:'Painting',zone:'Saint-Roch',
+   state:'pg',score:82,wx:700,wy:480,last:'5h ago',short_name:'Tanguay',avatar:'LT',dist:'0.9 km',badge:'9 jobs',
+   stars:'★★★★½',rating:'4.6',rcount:'(19)',vid:'Rénovation intérieure — Saint-Roch 2026',
+   week:3,month:9,rate:'89%',
+   locations:[{name:'Saint-Roch',cnt:'5 jobs'},{name:'Limoilou',cnt:'2 jobs'},{name:'Vieux-Québec',cnt:'2 jobs'}],
+   satellites:[
+     {wx:580,wy:360,icon:'🎨',label:'Interior walls · 5h ago'},
+     {wx:820,wy:360,icon:'📸',label:'Before/after · 6h ago'},
+     {wx:780,wy:560,icon:'✅',label:'Exterior · 2d ago'},
+   ],
+   events:[
+     {ic:'✅',mn:'Interior painting confirmed',sb:'Living room · Saint-Roch',tm:'5h ago'},
+     {ic:'📸',mn:'4 photos uploaded',sb:'Before/after walls',tm:'6h ago'},
+   ],
+   reviews:[{src:'Google',b:'g',sc:'4.6',ct:'(19)',st:'★★★★½',tx:'"Délais respectés, résultat parfait."',au:'Anne-Sophie L.'}],
+   comp:{inc:'7712938800',ins:'La Capitale — $1,000,000',war:'2 ans'},
+   co:{f:'2017',tm:'2026',emp:'4',ow:'Louis Tanguay',z:'Québec City'},
+  },
+  {id:'EL',name:'Électro Lavoie',trade:'Electrical',zone:'Sainte-Foy',
+   state:'pa',score:64,wx:1200,wy:820,last:'2d ago',short_name:'Lavoie',avatar:'ML',dist:'3.4 km',badge:null,
+   stars:'★★★★',rating:'4.4',rcount:'(12)',vid:'',week:1,month:4,rate:'75%',
+   locations:[{name:'Sainte-Foy',cnt:'3 jobs'},{name:'Sillery',cnt:'1 job'}],
+   satellites:[{wx:1080,wy:720,icon:'⚡',label:'Panel upgrade · 2d ago'},{wx:1320,wy:720,icon:'✅',label:'Wiring · 4d ago'}],
+   events:[{ic:'✅',mn:'Panel upgrade confirmed',sb:'200A · Sainte-Foy',tm:'2d ago'}],
+   reviews:[{src:'Google',b:'g',sc:'4.4',ct:'(12)',st:'★★★★',tx:'"Bon travail et honnête."',au:'Robert B.'}],
+   comp:{inc:'5512938300',ins:'Desjardins — $1,500,000',war:'1 an'},
+   co:{f:'2021',tm:'2026',emp:'3',ow:'Maxime Lavoie',z:'Sainte-Foy'},
+  },
+  {id:'PC',name:'Plomberie Côté',trade:'Plumbing',zone:'Limoilou',
+   state:'pa',score:61,wx:520,wy:860,last:'1d ago',short_name:'Côté',avatar:'DC',dist:'1.8 km',badge:null,
+   stars:'★★★★',rating:'4.2',rcount:'(9)',vid:'',week:2,month:5,rate:'80%',
+   locations:[{name:'Limoilou',cnt:'3 jobs'},{name:'Vieux-Québec',cnt:'2 jobs'}],
+   satellites:[{wx:380,wy:780,icon:'🔧',label:'Water heater · 1d ago'},{wx:640,wy:780,icon:'✅',label:'Pipe repair · 3d ago'}],
+   events:[{ic:'✅',mn:'Water heater confirmed',sb:'Limoilou',tm:'1d ago'}],
+   reviews:[],comp:{inc:'4490128300',ins:'Intact — $1,000,000',war:'2 ans'},
+   co:{f:'2018',tm:'2026',emp:'3',ow:'Danny Côté',z:'Québec & environs'},
+  },
+  {id:'RV',name:'Réno Valcourt',trade:'Renovation',zone:'Charlesbourg',
+   state:'pa',score:57,wx:1380,wy:300,last:'3d ago',short_name:'Valcourt',avatar:'EV',dist:'5.1 km',badge:null,
+   stars:'★★★½',rating:'3.8',rcount:'(7)',vid:'',week:1,month:3,rate:'71%',
+   locations:[{name:'Charlesbourg',cnt:'2 jobs'},{name:'Beauport',cnt:'1 job'}],
+   satellites:[{wx:1260,wy:220,icon:'🏗',label:'Basement · 3d ago'}],
+   events:[{ic:'✅',mn:'Basement confirmed',sb:'Charlesbourg',tm:'3d ago'}],
+   reviews:[],comp:{inc:'3318291200',ins:'SSQ — $1,000,000',war:'1 an'},
+   co:{f:'2020',tm:'2026',emp:'4',ow:'Eric Valcourt',z:'Charlesbourg'},
+  },
+  {id:'TN',name:'Toiture Nadeau',trade:'Roofing',zone:'Charlesbourg',
+   state:'pp',score:38,wx:1480,wy:480,last:'12d ago',short_name:'Nadeau',avatar:'BN',dist:'6.2 km',badge:null,
+   stars:'★★★',rating:'3.2',rcount:'(5)',vid:'',week:0,month:2,rate:'60%',
+   locations:[{name:'Charlesbourg',cnt:'2 jobs'}],
+   satellites:[],events:[],reviews:[],comp:{},
+   co:{f:'2022',tm:'2026',emp:'2',ow:'Bruno Nadeau',z:'Charlesbourg'},
+  },
+  {id:'EX',name:'Excel Toiture',trade:'Roofing',zone:'Sainte-Foy',
+   state:'pp',score:42,wx:1000,wy:1000,last:'8d ago',short_name:'Excel',avatar:'AP',dist:'4.0 km',badge:null,
+   stars:'★★★½',rating:'3.6',rcount:'(8)',vid:'',week:0,month:2,rate:'65%',
+   locations:[{name:'Sainte-Foy',cnt:'2 jobs'}],
+   satellites:[],events:[],reviews:[],comp:{},
+   co:{f:'2020',tm:'2026',emp:'4',ow:'Alexandre Poirier',z:'Sainte-Foy'},
+  },
+  {id:'GF',name:'GF Construction',trade:'General',zone:'Lebourgneuf',
+   state:'pq',score:14,wx:1560,wy:180,last:'28d ago',short_name:'GF Const.',avatar:'GF',dist:'7.3 km',badge:null,
+   stars:'★★',rating:'2.5',rcount:'(3)',vid:'',week:0,month:0,rate:'0%',
+   locations:[],satellites:[],events:[],reviews:[],comp:{},
+   co:{f:'2023',tm:'2026',emp:'2',ow:'Gaétan Fortin',z:'Lebourgneuf'},
+  },
+  {id:'CS',name:'Cuisine Simard',trade:'Renovation',zone:'Sainte-Foy',
+   state:'pa',score:55,wx:880,wy:1080,last:'4d ago',short_name:'Simard',avatar:'SS',dist:'4.6 km',badge:null,
+   stars:'★★★★',rating:'4.1',rcount:'(11)',vid:'',week:1,month:4,rate:'72%',
+   locations:[{name:'Sainte-Foy',cnt:'3 jobs'},{name:'Sillery',cnt:'1 job'}],
+   satellites:[{wx:760,wy:1000,icon:'🍳',label:'Kitchen reno · 4d ago'},{wx:1000,wy:1000,icon:'✅',label:'Bathroom · 6d ago'}],
+   events:[{ic:'✅',mn:'Kitchen renovation confirmed',sb:'Sainte-Foy',tm:'4d ago'}],
+   reviews:[],comp:{},
+   co:{f:'2019',tm:'2026',emp:'3',ow:'Steve Simard',z:'Sainte-Foy'},
+  },
+];
+
+// Neighborhood labels: world coords
+const neighborhoods = [
+  {label:'Limoilou',wx:420,wy:540},
+  {label:'Vieux-Québec',wx:940,wy:340},
+  {label:'Saint-Roch',wx:680,wy:420},
+  {label:'Sainte-Foy',wx:1160,wy:760},
+  {label:'Charlesbourg',wx:1400,wy:380},
+  {label:'Lebourgneuf',wx:1520,wy:220},
+];
+const clusterLabels = [
+  {label:'📍 4 jobs in Limoilou',wx:420,wy:800},
+  {label:'📍 3 jobs in Sainte-Foy',wx:1080,wy:960},
+];
+
+// ══════════════════════════════════════════════
+// MAP CANVAS DRAW
+// ══════════════════════════════════════════════
+function drawMap(){
+  const canvas = document.getElementById('map-canvas');
+  canvas.width = W; canvas.height = H_WORLD;
+  const ctx = canvas.getContext('2d');
+
+  // Base fill
+  ctx.fillStyle = '#e5e7eb';
+  ctx.fillRect(0,0,W,H_WORLD);
+
+  // City blocks (grid-aligned rectangles)
+  ctx.fillStyle = '#eae7e2';
+  const blockGrid = [];
+  for(let gx=0;gx<22;gx++)for(let gy=0;gy<19;gy++){
+    // skip some for roads
+    if(gx%3===2||gy%3===2)continue;
+    blockGrid.push([gx*TILE+4,gy*TILE+4,TILE*2-8,TILE*2-8]);
+  }
+  blockGrid.forEach(([x,y,w,h])=>{ctx.fillRect(x,y,w,h)});
+
+  // Parks
+  ctx.fillStyle = '#c5dba0';
+  ctx.globalAlpha = 0.6;
+  [[800,880,200,160],[1300,700,160,120],[200,1000,140,120],[1540,400,160,200]].forEach(([x,y,w,h])=>{
+    ctx.beginPath();ctx.roundRect(x,y,w,h,6);ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+
+  // Roads: grid lines
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 9;
+  for(let x=0;x<=W;x+=TILE*3){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H_WORLD);ctx.stroke();}
+  for(let y=0;y<=H_WORLD;y+=TILE*3){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  // Major roads (thicker)
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 16;
+  [240,480,720,960,1200,1440].forEach(x=>{ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H_WORLD);ctx.stroke();});
+  [240,480,720,960,1200,1440].forEach(y=>{ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();});
+}
+
+// ══════════════════════════════════════════════
+// CAMERA / PAN / ZOOM
+// ══════════════════════════════════════════════
+let camX=0, camY=0, zoom=1;
+const MIN_ZOOM=0.55, MAX_ZOOM=2.2;
+let homeX=440, homeY=600; // start centered on CB
+
+function applyCamera(){
+  document.getElementById('map-world').style.transform=`translate(${camX}px,${camY}px) scale(${zoom})`;
+  document.getElementById('map-world').style.transformOrigin='0 0';
+  updateEdgeIndicators();
+}
+
+function centerOn(wx,wy,z){
+  const vw=window.innerWidth, vh=window.innerHeight;
+  zoom = z||zoom;
+  camX = vw/2 - wx*zoom;
+  camY = vh*0.38 - wy*zoom; // offset upward to show map above sheet
+  applyCamera();
+}
+
+// world coords → screen coords
+function worldToScreen(wx,wy){
+  return {x:wx*zoom+camX, y:wy*zoom+camY};
+}
+function screenToWorld(sx,sy){
+  return {x:(sx-camX)/zoom, y:(sy-camY)/zoom};
+}
+
+// ══════════════════════════════════════════════
+// PIN DOM (in world space)
+// ══════════════════════════════════════════════
+function renderPins(){
+  // remove old pins
+  document.querySelectorAll('.pw,.nbh,.clbl').forEach(e=>e.remove());
+  const world = document.getElementById('map-world');
+
+  // neighborhood labels
+  neighborhoods.forEach(n=>{
+    const d=document.createElement('div');d.className='nbh';
+    d.style.left=n.wx+'px';d.style.top=n.wy+'px';
+    d.textContent=n.label;world.appendChild(d);
+  });
+  clusterLabels.forEach(n=>{
+    const d=document.createElement('div');d.className='clbl';
+    d.style.left=n.wx+'px';d.style.top=n.wy+'px';
+    d.textContent=n.label;world.appendChild(d);
+  });
+
+  contractors.forEach((c)=>{
+    const w=document.createElement('div');
+    w.className='pw '+c.state;
+    w.style.left=c.wx+'px';w.style.top=c.wy+'px';
+    w.setAttribute('data-id',c.id);
+
+    // Ring + avatar circle
+    const AVATAR_COLORS={
+      CB:'linear-gradient(135deg,#1e3a1e,#166534)',
+      MR:'linear-gradient(135deg,#1e1b4b,#3730a3)',
+      PT:'linear-gradient(135deg,#431407,#9a3412)',
+      EL:'linear-gradient(135deg,#0c4a6e,#0369a1)',
+      PC:'linear-gradient(135deg,#064e3b,#065f46)',
+      RV:'linear-gradient(135deg,#4a1d96,#6d28d9)',
+      TN:'linear-gradient(135deg,#374151,#4b5563)',
+      EX:'linear-gradient(135deg,#1c1917,#44403c)',
+      GF:'linear-gradient(135deg,#3f3f46,#52525b)',
+      CS:'linear-gradient(135deg,#7f1d1d,#991b1b)',
+    };
+    const ring=document.createElement('div');ring.className='pc';
+    const avatar=document.createElement('div');avatar.className='pa-inner';
+    avatar.style.background=AVATAR_COLORS[c.id]||'linear-gradient(135deg,#374151,#4b5563)';
+    avatar.textContent=c.avatar||c.id[0];
+    ring.appendChild(avatar);
+    w.appendChild(ring);
+
+    // Name · time pill — the one visible variable
+    const lbl=document.createElement('div');lbl.className='pin-label';
+    const nm=document.createElement('span');nm.className='pin-name';nm.textContent=c.short_name;
+    const tm=document.createElement('span');tm.className='pin-time';tm.textContent=c.last;
+    lbl.appendChild(nm);lbl.appendChild(tm);
+    w.appendChild(lbl);
+
+    w.addEventListener('click',(e)=>{e.stopPropagation();if(!wasDrag)selectPin(c.id);});
+    world.appendChild(w);
+  });
+}
+
+// ══════════════════════════════════════════════
+// DRAG TO PAN  
+// ══════════════════════════════════════════════
+const vp = document.getElementById('map-viewport');
+let dragStart=null, camAtDrag=null, wasDrag=false, lastPos=null, velocity={x:0,y:0};
+let rafId=null;
+
+function getDragPos(e){
+  if(e.touches)return{x:e.touches[0].clientX,y:e.touches[0].clientY};
+  return{x:e.clientX,y:e.clientY};
+}
+
+vp.addEventListener('pointerdown',e=>{
+  if(e.target.closest('.pw')||e.target.closest('.sat'))return;
+  wasDrag=false;
+  dragStart=getDragPos(e);
+  camAtDrag={x:camX,y:camY};
+  lastPos=dragStart;
+  velocity={x:0,y:0};
+  vp.classList.add('dragging');
+  cancelAnimationFrame(rafId);
+},{passive:true});
+
+vp.addEventListener('pointermove',e=>{
+  if(!dragStart)return;
+  const pos=getDragPos(e);
+  const dx=pos.x-dragStart.x, dy=pos.y-dragStart.y;
+  if(Math.abs(dx)>4||Math.abs(dy)>4)wasDrag=true;
+  velocity={x:pos.x-lastPos.x,y:pos.y-lastPos.y};
+  lastPos=pos;
+  camX=camAtDrag.x+dx;camY=camAtDrag.y+dy;
+  applyCamera();
+},{passive:true});
+
+vp.addEventListener('pointerup',e=>{
+  if(!dragStart)return;
+  dragStart=null;
+  vp.classList.remove('dragging');
+  // momentum
+  if(Math.abs(velocity.x)>2||Math.abs(velocity.y)>2){
+    let vx=velocity.x*0.85,vy=velocity.y*0.85;
+    function momentum(){
+      camX+=vx;camY+=vy;vx*=0.9;vy*=0.9;
+      applyCamera();
+      if(Math.abs(vx)>0.5||Math.abs(vy)>0.5)rafId=requestAnimationFrame(momentum);
+    }
+    rafId=requestAnimationFrame(momentum);
+  }
+  // tap on empty map = deselect
+  setTimeout(()=>{if(!wasDrag){clearLayer2();document.querySelectorAll('.pw').forEach(p=>p.classList.remove('sel'));}},0);
+},{passive:true});
+
+// PINCH ZOOM
+let pinchDist0=null,zoom0=null;
+vp.addEventListener('touchstart',e=>{
+  if(e.touches.length===2){
+    pinchDist0=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    zoom0=zoom;
+  }
+},{passive:true});
+vp.addEventListener('touchmove',e=>{
+  if(e.touches.length===2&&pinchDist0){
+    const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    const cx=(e.touches[0].clientX+e.touches[1].clientX)/2;
+    const cy=(e.touches[0].clientY+e.touches[1].clientY)/2;
+    const newZ=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,zoom0*(d/pinchDist0)));
+    const wc=screenToWorld(cx,cy);
+    zoom=newZ;
+    camX=cx-wc.x*zoom;camY=cy-wc.y*zoom;
+    applyCamera();
+  }
+},{passive:true});
+vp.addEventListener('touchend',()=>{pinchDist0=null;},{passive:true});
+
+// Button zoom
+document.getElementById('zIn').addEventListener('click',()=>zoomBy(1.25));
+document.getElementById('zOut').addEventListener('click',()=>zoomBy(0.8));
+function zoomBy(f){
+  const cx=window.innerWidth/2,cy=window.innerHeight/2;
+  const wc=screenToWorld(cx,cy);
+  zoom=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,zoom*f));
+  camX=cx-wc.x*zoom;camY=cy-wc.y*zoom;
+  document.getElementById('map-world').style.transition='transform .2s ease';
+  applyCamera();
+  setTimeout(()=>document.getElementById('map-world').style.transition='',220);
+}
+
+// Center on home
+document.getElementById('locBtn').addEventListener('click',()=>{
+  document.getElementById('map-world').style.transition='transform .4s ease';
+  centerOn(homeX,homeY,1);
+  setTimeout(()=>document.getElementById('map-world').style.transition='',420);
+});
+
+// ══════════════════════════════════════════════
+// LAYER 2: ORBIT SYSTEM
+// ══════════════════════════════════════════════
+let L2id=null;
+
+function clearLayer2(){
+  document.querySelectorAll('.sat').forEach(e=>e.remove());
+  document.getElementById('orbit-svg').innerHTML='';
+  document.querySelectorAll('.pw.L2').forEach(p=>p.classList.remove('L2'));
+  document.querySelectorAll('.ei').forEach(e=>e.remove());
+  L2id=null;
+}
+
+function activateLayer2(id){
+  clearLayer2();
+  L2id=id;
+  const c=contractors.find(x=>x.id===id);
+  if(!c||!c.satellites||!c.satellites.length)return;
+
+  const mainPin=document.querySelector(`.pw[data-id="${id}"]`);
+  if(mainPin)mainPin.classList.add('L2');
+
+  const world=document.getElementById('map-world');
+  const svg=document.getElementById('orbit-svg');
+
+  c.satellites.forEach((sat,i)=>{
+    // draw orbit line in SVG (world space) — dashed purple thread
+    const lineId='grad-'+id+'-'+i;
+    // gradient from main pin (solid) to satellite (fades)
+    const defs=svg.querySelector('defs')||svg.insertBefore(document.createElementNS('http://www.w3.org/2000/svg','defs'),svg.firstChild);
+    const grad=document.createElementNS('http://www.w3.org/2000/svg','linearGradient');
+    grad.setAttribute('id',lineId);
+    grad.setAttribute('gradientUnits','userSpaceOnUse');
+    grad.setAttribute('x1',c.wx);grad.setAttribute('y1',c.wy);
+    grad.setAttribute('x2',sat.wx);grad.setAttribute('y2',sat.wy);
+    const s1=document.createElementNS('http://www.w3.org/2000/svg','stop');
+    s1.setAttribute('offset','0%');s1.setAttribute('stop-color','rgba(124,58,237,0.55)');
+    const s2=document.createElementNS('http://www.w3.org/2000/svg','stop');
+    s2.setAttribute('offset','100%');s2.setAttribute('stop-color','rgba(124,58,237,0.15)');
+    grad.appendChild(s1);grad.appendChild(s2);defs.appendChild(grad);
+    const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1',c.wx);line.setAttribute('y1',c.wy);
+    line.setAttribute('x2',sat.wx);line.setAttribute('y2',sat.wy);
+    line.setAttribute('stroke','url(#'+lineId+')');
+    line.setAttribute('stroke-width','1.8');
+    line.setAttribute('stroke-dasharray','5 4');
+    svg.appendChild(line);
+
+    // satellite pin in world space
+    const sw=document.createElement('div');
+    sw.className='sat';
+    sw.style.left=sat.wx+'px';sw.style.top=sat.wy+'px';
+    sw.style.animationDelay=(i*0.08)+'s';
+    // satellite: icon ring + mini label below (same InstaMap pattern)
+    // Satellite: purple InstaMap pin — ring + icon avatar + job·time label
+    const parts=sat.label.split('·');
+    const jobType=parts[0]?parts[0].trim():'Job';
+    const timeAgo=parts[1]?parts[1].trim():'';
+    sw.innerHTML=
+      '<div class="sat-ring"><div class="sat-av">'+sat.icon+'</div></div>'+
+      '<div class="sat-lbl"><span class="sat-lbl-job">'+jobType+'</span>'+
+      (timeAgo?'<span class="sat-lbl-time">'+timeAgo+'</span>':'')+'</div>';
+    sw.addEventListener('click',e=>{e.stopPropagation();});
+    world.appendChild(sw);
+  });
+
+  // schedule edge indicators update
+  setTimeout(updateEdgeIndicators,50);
+}
+
+function updateEdgeIndicators(){
+  document.querySelectorAll('.ei').forEach(e=>e.remove());
+  if(!L2id)return;
+  const c=contractors.find(x=>x.id===L2id);
+  if(!c||!c.satellites)return;
+
+  const VP_W=window.innerWidth, VP_H=window.innerHeight;
+  const sheetH=200; // collapsed sheet height
+
+  c.satellites.forEach((sat,i)=>{
+    const sc=worldToScreen(sat.wx,sat.wy);
+    const margin=14;
+    const onScreen=sc.x>margin+30&&sc.x<VP_W-margin-30&&sc.y>margin+60&&sc.y<VP_H-sheetH-margin;
+    if(onScreen)return;
+
+    // compute edge position
+    const ei=document.createElement('div');
+    ei.className='ei';
+    let ex=0,ey=0;
+    const dx=sc.x-VP_W/2, dy=sc.y-(VP_H-sheetH)/2;
+    const angle=Math.atan2(dy,dx);
+    const corners=[[VP_W/2-120,60],[VP_W/2+120,60],[VP_W/2+120,VP_H-sheetH-40],[VP_W/2-120,VP_H-sheetH-40]];
+    // clamp to screen edge
+    if(sc.x<margin+30){ex=margin;ey=Math.max(70,Math.min(VP_H-sheetH-36,sc.y));}
+    else if(sc.x>VP_W-margin-30){ex=VP_W-80;ey=Math.max(70,Math.min(VP_H-sheetH-36,sc.y));}
+    else if(sc.y<margin+60){ex=Math.max(70,Math.min(VP_W-80,sc.x));ey=70;}
+    else{ex=Math.max(70,Math.min(VP_W-80,sc.x));ey=VP_H-sheetH-40;}
+
+    ei.style.left=ex+'px';ei.style.top=ey+'px';
+    // arrow direction
+    let arrow='';
+    if(sc.x<margin+30)arrow='◀';
+    else if(sc.x>VP_W-margin-30)arrow='▶';
+    else if(sc.y<margin+60)arrow='▲';
+    else arrow='▼';
+    const ejob=sat.label.split('·')[0]?sat.label.split('·')[0].trim():'Job';
+    const etime=sat.label.split('·')[1]?sat.label.split('·')[1].trim():'';
+    ei.innerHTML=sat.icon+' <span style="font:500 10px DM Sans,sans-serif">'+ejob+'</span>'+(etime?' <span style="opacity:.7">'+etime+'</span>':'')+' '+arrow;
+    ei.title=sat.label;
+    ei.addEventListener('click',()=>{
+      // pan to satellite
+      document.getElementById('map-world').style.transition='transform .5s cubic-bezier(.34,1.56,.64,1)';
+      centerOn(sat.wx,sat.wy,zoom);
+      setTimeout(()=>document.getElementById('map-world').style.transition='',520);
+    });
+    document.body.appendChild(ei);
+  });
+}
+
+// ══════════════════════════════════════════════
+// SELECT PIN
+// ══════════════════════════════════════════════
+function selectPin(id){
+  document.querySelectorAll('.pw').forEach(p=>p.classList.remove('sel'));
+  const pin=document.querySelector(`.pw[data-id="${id}"]`);
+  if(pin)pin.classList.add('sel');
+  activateLayer2(id);
+  openProf(id);
+  // pan to contractor (don't override if user is already close)
+  const c=contractors.find(x=>x.id===id);
+  if(c){
+    const sc=worldToScreen(c.wx,c.wy);
+    const farX=sc.x<80||sc.x>window.innerWidth-80;
+    const farY=sc.y<80||sc.y>window.innerHeight*0.55;
+    if(farX||farY){
+      document.getElementById('map-world').style.transition='transform .4s cubic-bezier(.34,1.56,.64,1)';
+      centerOn(c.wx,c.wy,zoom);
+      setTimeout(()=>document.getElementById('map-world').style.transition='',420);
+    }
+  }
+}
+
+// ══════════════════════════════════════════════
+// FEED
+// ══════════════════════════════════════════════
+function renderFeed(){
+  const feed=document.getElementById('shFeed');feed.innerHTML='';
+  [...contractors].sort((a,b)=>b.score-a.score).forEach(c=>{
+    const rc={pg:'rg',pa:'ra',pp:'rp',pq:'rq'}[c.state]||'rq';
+    const sc=c.score>=75?'s-hi':c.score>=50?'s-mi':'s-lo';
+    const ev=c.events[0];
+    const d=document.createElement('div');d.className='fi';d.setAttribute('data-id',c.id);
+    d.innerHTML=`
+      <div class="fi-av ${rc}">${c.id}</div>
+      <div class="fi-body"><div class="fi-name">${c.name}</div><div class="fi-sub">${ev?ev.mn:'No recent activity'}</div></div>
+      <div class="fi-right"><div class="fi-time">${c.last}</div><div class="fi-score ${sc}">${c.score}</div></div>`;
+    d.addEventListener('click',()=>selectPin(c.id));
+    feed.appendChild(d);
+  });
+}
+
+// ══════════════════════════════════════════════
+// PROFILE
+// ══════════════════════════════════════════════
+function openProf(id){
+  const c=contractors.find(x=>x.id===id);if(!c)return;
+  document.getElementById('pName').textContent=c.name;
+  document.getElementById('pStars').textContent=c.stars;
+  document.getElementById('pRating').textContent=c.rating;
+  document.getElementById('pRcount').textContent=c.rcount;
+  document.getElementById('pTrade').textContent=`${c.trade} · ${c.zone}`;
+  document.getElementById('pStatus').textContent=`Active ${c.last}`;
+  document.getElementById('pDist').textContent=c.dist;
+  document.getElementById('pVid').textContent=c.vid||`${c.name} · ${c.zone}`;
+  document.getElementById('ovW').textContent=c.week;
+  document.getElementById('ovM').textContent=c.month;
+  document.getElementById('ovR').textContent=c.rate;
+
+  const locEl=document.getElementById('ovLocs');locEl.innerHTML='';
+  (c.locations||[]).forEach(l=>{
+    locEl.innerHTML+=`<div class="ov-loc"><div class="ov-loc-dot"></div><div class="ov-loc-name">${l.name}</div><div class="ov-loc-cnt">${l.cnt}</div></div>`;
+  });
+  if(!c.locations||!c.locations.length)locEl.innerHTML='<div style="font:400 12px DM Sans,sans-serif;color:var(--mt2)">No location data yet</div>';
+
+  const actEl=document.getElementById('actC');actEl.innerHTML='';
+  if(!c.events.length){actEl.innerHTML='<div style="font:400 12px DM Sans,sans-serif;color:var(--mt2);padding:8px 0">No recent confirmed activity</div>';}
+  else{c.events.forEach(e=>{actEl.innerHTML+=`<div class="ae"><div class="ae-ic">${e.ic}</div><div class="ae-body"><div class="ae-main">${e.mn}</div><div class="ae-sub">${e.sb}</div></div><div class="ae-time">${e.tm}</div></div>`;});}
+
+  const rvEl=document.getElementById('rvC');rvEl.innerHTML='';
+  if(!c.reviews.length){rvEl.innerHTML='<div style="font:400 12px DM Sans,sans-serif;color:var(--mt2);padding:8px 0">No reviews yet</div>';}
+  else{c.reviews.forEach(rv=>{rvEl.innerHTML+=`<div class="rv"><div class="rv-top"><div class="rv-src"><div class="rv-badge rv-${rv.b}">${rv.b==='g'?'G':'f'}</div>${rv.src} <strong>${rv.sc}</strong> ${rv.ct}</div><div class="rv-stars">${rv.st}</div></div><div class="rv-text">${rv.tx}</div><div class="rv-author">${rv.au}</div></div>`;});}
+
+  const co=c.co||{};
+  document.getElementById('coC').innerHTML=`<div class="co-grid"><div class="co-cell"><div class="co-v">${co.f||'—'}</div><div class="co-k">Fondée</div></div><div class="co-cell"><div class="co-v">${co.tm||'2026'}</div><div class="co-k">Sur Trustmaps</div></div><div class="co-cell"><div class="co-v">${co.emp||'—'}</div><div class="co-k">Employés</div></div></div><div class="info-row"><div class="info-ic">👤</div><div class="info-body"><div class="info-label">${co.ow||'—'}</div><div class="info-sub">Propriétaire</div></div></div><div class="info-row"><div class="info-ic">📍</div><div class="info-body"><div class="info-label">${co.z||'—'}</div><div class="info-sub">Zone desservie</div></div></div>`;
+  const cl=c.comp||{};
+  const compEl=document.getElementById('compC');compEl.innerHTML='';
+  if(cl.inc)compEl.innerHTML+=`<div class="info-row"><div class="info-ic">📋</div><div class="info-body"><div class="info-label"><a href="#" class="info-link">${cl.inc}</a></div><div class="info-sub">N° d'incorporation</div></div></div>`;
+  if(cl.ins)compEl.innerHTML+=`<div class="info-row"><div class="info-ic">🛡️</div><div class="info-body"><div class="info-label">${cl.ins}</div><div class="info-sub">Assurance</div></div></div>`;
+  if(cl.war)compEl.innerHTML+=`<div class="info-row"><div class="info-ic">🔧</div><div class="info-body"><div class="info-label">${cl.war}</div><div class="info-sub">Garantie</div></div></div>`;
+  if(!cl.inc)compEl.innerHTML='<div style="font:400 12px DM Sans,sans-serif;color:var(--mt2)">Not verified yet</div>';
+
+  switchTab('ov',document.querySelector('.pr-tab'));
+  document.getElementById('shDef').style.display='none';
+  document.getElementById('shProf').classList.add('on');
+  document.getElementById('shProf').querySelector('.pr-body').scrollTop=0;
+  snapSheet(Math.round(window.innerHeight*.44));
+}
+
+function closeProf(){
+  document.getElementById('shDef').style.display='';
+  document.getElementById('shProf').classList.remove('on');
+  document.querySelectorAll('.pw').forEach(p=>p.classList.remove('sel'));
+  clearLayer2();
+  snapSheet(window.innerHeight-200);
+}
+
+function switchTab(name,el){
+  document.querySelectorAll('.pr-tab').forEach(t=>t.classList.remove('active'));
+  if(el)el.classList.add('active');
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('on'));
+  const pane=document.getElementById('tab-'+name);
+  if(pane)pane.classList.add('on');
+}
+
+// ══════════════════════════════════════════════
+// BOTTOM SHEET DRAG
+// ══════════════════════════════════════════════
+(function(){
+  const sheet=document.getElementById('sheet');
+  const handle=document.getElementById('handle');
+  const VH=window.innerHeight;
+  const COLL=VH-200,MID=Math.round(VH*.44),EXP=0;
+  function getT(){const m=sheet.style.transform.match(/translateY\((.+)px\)/);return m?parseFloat(m[1]):COLL;}
+  window.snapSheet=function(t){
+    sheet.style.transition='transform .32s cubic-bezier(.34,1.56,.64,1)';
+    sheet.style.transform=`translateY(${t}px)`;
+    const shH=VH-t,off=shH+10;
+    document.querySelector('.stats-bar').style.bottom=off+'px';
+    document.querySelector('.zoom-ctrl').style.bottom=(shH+14)+'px';
+    document.querySelector('.loc-btn').style.bottom=(shH+60)+'px';
+    document.querySelector('.map-legend').style.bottom=(shH+110)+'px';
+  };
+  let sy=0,st=0,shDrag=false;
+  function down(e){shDrag=true;sy=e.touches?e.touches[0].clientY:e.clientY;st=getT();sheet.style.transition='none';}
+  function move(e){
+    if(!shDrag)return;
+    const cy=e.touches?e.touches[0].clientY:e.clientY;
+    sheet.style.transform=`translateY(${Math.max(EXP,Math.min(COLL,st+(cy-sy)))}px)`;
+  }
+  function up(e){
+    if(!shDrag)return;shDrag=false;
+    const cy=e.changedTouches?e.changedTouches[0].clientY:e.clientY;
+    const vel=cy-sy,curr=getT();
+    const opts=[COLL,MID,EXP];
+    let snap;
+    if(vel>60){snap=curr<MID?MID:COLL;}
+    else if(vel<-60){snap=curr>MID?MID:EXP;}
+    else{snap=opts.reduce((a,b)=>Math.abs(curr-a)<Math.abs(curr-b)?a:b);}
+    snapSheet(snap);
+  }
+  handle.addEventListener('touchstart',down,{passive:true});
+  document.addEventListener('touchmove',move,{passive:true});
+  document.addEventListener('touchend',up);
+  handle.addEventListener('mousedown',down);
+  document.addEventListener('mousemove',move);
+  document.addEventListener('mouseup',up);
+  sheet.style.transform=`translateY(${COLL}px)`;
+})();
+
+// ══════════════════════════════════════════════
+// VIEWER COUNT & JOB COUNTER
+// ══════════════════════════════════════════════
+let vc=342,vcDir=1;
+function animVc(){
+  vc+=Math.floor(Math.random()*4+1)*vcDir;
+  if(vc>=498)vcDir=-1;if(vc<=202)vcDir=1;
+  document.getElementById('vc').textContent=vc;
+  setTimeout(animVc,2500+Math.random()*2500);
+}
+animVc();
+let cnt=41;const jcEl=document.getElementById('jc');
+const tk2=setInterval(()=>{jcEl.textContent=++cnt;if(cnt>=47)clearInterval(tk2);},180);
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+drawMap();
+renderPins();
+renderFeed();
+centerOn(homeX,homeY,1);
+setTimeout(()=>selectPin('CB'),600);
+</script>
+</body>
+</html>
